@@ -1,32 +1,4 @@
-/* ------------------------
-   External Photo Sidebar
-   ------------------------ */
-
-/* Container for the sidebar */
-.eps-view {
-  padding: 8px;
-  height: 100%;
-  box-sizing: border-box;
-}
-
-/* Top bar (title + refresh button) */
-.eps-topbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-.eps-title { font-weight: 600; }
-
-.eps-dirinfo {
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-  margin-bottom: 8px;
-  word-break: break-all;
-}
-
-/* -------- Grid of thumbnails -------- */
+/* Keep the thumbnail grid neat */
 .eps-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
@@ -35,95 +7,40 @@
   height: calc(100% - 64px);
 }
 
-/* Thumbnail card */
+/* Thumbnail cards: fixed height box with filename always visible */
 .eps-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  padding: 6px;
-  border-radius: 6px;
   cursor: pointer;
-  background: var(--background-primary);
+  border-radius: 6px;
+  padding: 4px;
+  background: var(--background-secondary);
   transition: background 0.15s ease;
+  height: 180px;              /* 🔧 fixed box height */
+  overflow: hidden;
 }
-.eps-card:hover {
-  background: var(--background-modifier-hover);
-}
+.eps-card:hover { background: var(--background-modifier-hover); }
 
-/* Thumbnail image */
+/* Thumbnails fit nicely */
 .eps-thumb {
-  width: 100px;
-  height: 140px;
+  max-width: 100%;
+  max-height: 140px;          /* 🔧 reserved space for label */
   object-fit: cover;
   border-radius: 4px;
-  user-select: none;
-  -webkit-user-drag: none;
 }
 
-/* Filename under image */
+/* Label always visible */
 .eps-label {
   margin-top: 4px;
   font-size: 11px;
   color: var(--text-muted);
   text-align: center;
+  line-height: 1.2;
+  max-height: 2.4em;          /* show up to 2 lines */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* ------------------------
-   Full Image Modal
-   ------------------------ */
-.modal.eps-modal {
-  width: 90vw !important;
-  max-width: 90vw !important;
-  height: 90vh !important;
-  max-height: 90vh !important;
-}
-
-.modal.eps-modal .modal-content {
-  width: 100% !important;
-  height: 100% !important;
-  max-width: 100% !important;
-  max-height: 100% !important;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Modal header */
-.eps-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.eps-modal-title {
-  font-weight: 600;
-  margin-right: 8px;
-}
-
-.eps-modal-actions button {
-  padding: 4px 8px;
-  border-radius: 6px;
-  border: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary);
-  cursor: pointer;
-}
-
-/* Modal body */
-.eps-modal-scroller {
-  flex: 1 1 auto;
-  overflow: auto;
-  padding: 10px;
-}
-
-/* Full image inside modal */
-.eps-full-image {
-  display: block;
-  max-width: 100%;
-  max-height: 100%;
-  object-fit: contain;
+  width: 100%;
 }

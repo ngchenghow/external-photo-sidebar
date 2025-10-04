@@ -1,7 +1,8 @@
-/* External Photo Sidebar v1.0.1 (data-URL only, no file://) */
+/* External Photo Sidebar v1.1.0 (data-URL + Copy to Clipboard) */
 const { Plugin, PluginSettingTab, Setting, ItemView, Modal, Notice } = require('obsidian');
 const fs = require('fs');
 const path = require('path');
+const { clipboard, nativeImage, shell } = require('electron');
 
 const VIEW_TYPE = 'external-photo-sidebar-view';
 const ICON = 'image-file';
@@ -18,73 +19,65 @@ function mimeOf(ext){
     default: return 'application/octet-stream';
   }
 }
+
 async function fileToDataUrl(p){
   const buf = await fs.promises.readFile(p);
   return `data:${mimeOf(path.extname(p))};base64,${buf.toString('base64')}`;
 }
 
-class FullImageModal extends Modal {
-  constructor(app, filePath) {
-    super(app);
-    this.filePath = filePath;
+async function copyImageToClipboard(filePath){
+  try {
+    const buf = await fs.promises.readFile(filePath);
+    // nativeImage auto-detects PNG/JPEG/BMP/WebP from buffer
+    const img = nativeImage.createFromBuffer(buf);
+    if (img.isEmpty()) throw new Error('Unsupported image format or empty buffer');
+    clipboard.writeImage(img);
+    new Notice('✅ Image copied to clipboard');
+  } catch (e) {
+    console.error('Copy failed:', e);
+    new Notice('❌ Copy failed: ' + (e?.message || 'Unknown error'));
   }
-  async onOpen() {
+}
+
+class FullImageModal extends Modal{
+  constructor(app, filePath){ super(app); this.filePath = filePath; }
+  async onOpen(){
     this.modalEl.addClass('eps-modal');
 
-    // 🔧 Force wide/tall modal via inline styles
-    Object.assign(this.modalEl.style, {
-      width: '92vw',
-      maxWidth: '92vw',
-      height: '92vh',
-      maxHeight: '92vh',
-    });
-    Object.assign(this.contentEl.style, {
-      width: '100%',
-      height: '100%',
-      maxWidth: '100%',
-      maxHeight: '100%',
-      display: 'flex',
-      flexDirection: 'column'
-    });
+    // Force wide/tall modal (overrides theme limits)
+    Object.assign(this.modalEl.style, { width:'92vw', maxWidth:'92vw', height:'92vh', maxHeight:'92vh' });
+    Object.assign(this.contentEl.style, { width:'100%', height:'100%', display:'flex', flexDirection:'column' });
 
-    const header = this.contentEl.createDiv({ cls: 'eps-modal-header' });
-    header.createEl('div', { text: require('path').basename(this.filePath), cls: 'eps-modal-title' });
-    const btns = header.createDiv({ cls: 'eps-modal-actions' });
-    const openBtn = btns.createEl('button', { text: 'Open Externally' });
-    openBtn.addEventListener('click', () => {
-      require('electron').shell.openPath(this.filePath);
-    });
+    const header = this.contentEl.createDiv({cls:'eps-modal-header'});
+    header.createEl('div',{cls:'eps-modal-title',text:path.basename(this.filePath)});
+    const btns = header.createDiv({cls:'eps-modal-actions'});
 
-    const scroller = this.contentEl.createDiv({ cls: 'eps-modal-scroller' });
-    // fill remaining space
-    Object.assign(scroller.style, { flex: '1 1 auto', overflow: 'auto' });
+    const copyBtn = btns.createEl('button',{ text:'Copy to Clipboard' });
+    copyBtn.addEventListener('click', ()=> copyImageToClipboard(this.filePath));
 
-    const img = scroller.createEl('img', { cls: 'eps-full-image' });
-    img.alt = require('path').basename(this.filePath);
-    // keep image contained within modal
-    Object.assign(img.style, {
-      maxWidth: '100%',
-      maxHeight: '100%',
-      objectFit: 'contain',
-      display: 'block'
-    });
+    const openBtn = btns.createEl('button',{ text:'Open Externally' });
+    openBtn.addEventListener('click', ()=> shell.openPath(this.filePath));
 
-    // data-URL loader (keep your existing helper)
+    const scroller = this.contentEl.createDiv({cls:'eps-modal-scroller'});
+    Object.assign(scroller.style, { flex:'1 1 auto', overflow:'auto' });
+
+    const img = scroller.createEl('img',{cls:'eps-full-image'});
+    img.alt = path.basename(this.filePath);
+    Object.assign(img.style, { maxWidth:'100%', maxHeight:'100%', objectFit:'contain', display:'block' });
     img.src = await fileToDataUrl(this.filePath);
 
-    // optional: Ctrl+wheel zoom
+    // Ctrl + wheel zoom
     let scale = 1;
-    scroller.addEventListener('wheel', (e) => {
-      if (!e.ctrlKey) return;
+    scroller.addEventListener('wheel',(e)=>{
+      if(!e.ctrlKey) return;
       e.preventDefault();
-      scale = Math.max(0.1, Math.min(8, scale + (e.deltaY < 0 ? 0.1 : -0.1)));
+      scale = Math.max(0.1, Math.min(8, scale + (e.deltaY<0?0.1:-0.1)));
       img.style.transform = `scale(${scale})`;
       img.style.transformOrigin = '0 0';
     });
   }
-  onClose() { this.contentEl.empty(); }
+  onClose(){ this.contentEl.empty(); }
 }
-
 
 class PhotoSidebarView extends ItemView{
   constructor(leaf, plugin){ super(leaf); this.plugin = plugin; this.watcher = null; }
@@ -101,7 +94,9 @@ class PhotoSidebarView extends ItemView{
     if(!dir || !fs.existsSync(dir)) return;
     try{
       this.watcher = fs.watch(dir,{recursive:this.plugin.settings.recursive??true},()=>this.reload());
-    }catch{ try{ this.watcher = fs.watch(dir,{},()=>this.reload()); }catch{} }
+    }catch{
+      try{ this.watcher = fs.watch(dir,{},()=>this.reload()); }catch(e){ console.error('watch failed', e); }
+    }
   }
   unwatch(){ if(this.watcher){ try{ this.watcher.close(); }catch{} this.watcher=null; } }
 
@@ -109,7 +104,8 @@ class PhotoSidebarView extends ItemView{
     const out=[], stack=[root];
     while(stack.length){
       const cur = stack.pop();
-      let entries=[]; try{ entries = fs.readdirSync(cur,{withFileTypes:true}); }catch{ continue; }
+      let entries=[];
+      try{ entries = fs.readdirSync(cur,{withFileTypes:true}); }catch{ continue; }
       for(const ent of entries){
         const p = path.join(cur, ent.name);
         if(ent.isDirectory()){ if(recursive) stack.push(p); }
@@ -118,11 +114,13 @@ class PhotoSidebarView extends ItemView{
         }
       }
     }
-    out.sort((a,b)=>a.localeCompare(b)); return out;
+    out.sort((a,b)=>a.localeCompare(b));
+    return out;
   }
 
   async reload(){
     this.containerEl.empty();
+
     const top = this.containerEl.createDiv({cls:'eps-topbar'});
     top.createEl('div',{cls:'eps-title',text:'External Photos'});
     const btn = top.createEl('button',{text:'Refresh'}); btn.onclick = ()=>this.reload();
@@ -136,19 +134,30 @@ class PhotoSidebarView extends ItemView{
     const files = this.readImages(dir, this.plugin.settings.recursive??true);
     const grid = this.containerEl.createDiv({cls:'eps-grid'});
     const thumbSize = Number(this.plugin.settings.thumbSize||96);
+
     if(files.length===0){ grid.createDiv({text:'No images found.'}); return; }
 
-    const tasks = files.map(async (f)=>{
+    for(const f of files){
       const card = grid.createDiv({cls:'eps-card'});
       const img = card.createEl('img',{cls:'eps-thumb'});
       img.alt = path.basename(f);
       img.style.width = `${thumbSize}px`;
-      img.style.height = `${thumbSize}px`;
+      img.style.height = `${Math.round(thumbSize*1.4)}px`; // book-ish aspect
       card.createDiv({cls:'eps-label', text:path.basename(f)});
-      card.onclick = ()=> new FullImageModal(this.app, f).open();
-      try{ img.src = await fileToDataUrl(f); }catch{ img.replaceWith(createEl('div',{text:'⚠️'})); }
-    });
-    await Promise.allSettled(tasks);
+
+      // Left-click → open modal
+      card.addEventListener('click', ()=> new FullImageModal(this.app, f).open());
+
+      // Right-click → context copy
+      card.addEventListener('contextmenu', async (e)=>{
+        e.preventDefault();
+        await copyImageToClipboard(f);
+      });
+
+      // Load thumb
+      try{ img.src = await fileToDataUrl(f); }
+      catch{ img.replaceWith(createEl('div',{text:'⚠️'})); }
+    }
   }
 }
 
@@ -162,11 +171,15 @@ class SettingsTab extends PluginSettingTab{
       .addText(t=>t.setPlaceholder('C:\\Users\\Me\\Pictures')
         .setValue(this.plugin.settings.folderPath)
         .onChange(async(v)=>{ this.plugin.settings.folderPath=v.trim(); await this.plugin.saveSettings(); new Notice('Folder path saved'); await this.plugin.activateView(); }));
+
     new Setting(containerEl).setName('Recursive').setDesc('Include subfolders')
       .addToggle(t=>t.setValue(this.plugin.settings.recursive).onChange(async(v)=>{ this.plugin.settings.recursive=v; await this.plugin.saveSettings(); }));
+
     new Setting(containerEl).setName('Thumbnail size (px)').setDesc('Grid thumbnail width/height')
-      .addSlider(s=>s.setLimits(48,256,8).setValue(Number(this.plugin.settings.thumbSize||96))
-        .onChange(async(v)=>{ this.plugin.settings.thumbSize=v; await this.plugin.saveSettings(); }).setDynamicTooltip());
+      .addSlider(s=>s.setLimits(64, 256, 4)
+        .setValue(Number(this.plugin.settings.thumbSize||96))
+        .onChange(async(v)=>{ this.plugin.settings.thumbSize=v; await this.plugin.saveSettings(); })
+        .setDynamicTooltip());
   }
 }
 
@@ -180,7 +193,6 @@ module.exports = class ExternalPhotoPlugin extends Plugin{
     this.addRibbonIcon(ICON, 'Open Photo Sidebar', ()=>this.activateView());
     this.addSettingTab(new SettingsTab(this.app, this));
     this.app.workspace.onLayoutReady(()=>this.activateView());
-    new Notice('External Photo Sidebar (data-url) loaded'); // confirm new build is active
   }
   async activateView(){
     const right = this.app.workspace.getRightLeaf(false);
