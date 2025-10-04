@@ -1,0 +1,10 @@
+{
+  "id": "external-photo-sidebar",
+  "name": "External Photo Sidebar",
+  "version": "1.0.0",
+  "minAppVersion": "1.6.0",
+  "description": "Show photos from an external folder in the right sidebar; click to view full size.",
+  "author": "CH",
+  "authorUrl": "",
+  "isDesktopOnly": true
+}
