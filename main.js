@@ -192,7 +192,7 @@ module.exports = class ExternalPhotoPlugin extends Plugin{
     this.addCommand({id:'open-external-photo-sidebar', name:'Open Photo Sidebar', callback:()=>this.activateView()});
     this.addRibbonIcon(ICON, 'Open Photo Sidebar', ()=>this.activateView());
     this.addSettingTab(new SettingsTab(this.app, this));
-    this.app.workspace.onLayoutReady(()=>this.activateView());
+    //this.app.workspace.onLayoutReady(()=>this.activateView());
   }
   async activateView(){
     const right = this.app.workspace.getRightLeaf(false);
